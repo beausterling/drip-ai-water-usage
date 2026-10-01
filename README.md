@@ -40,9 +40,9 @@ add instead of replacing yours.
 
 | Terminal | Layout |
 |---|---|
-| Ghostty 1.3+ / iTerm2 | Splits the current tab, with the meter underneath |
+| Ghostty 1.3+ / iTerm2 | Splits the current tab, with a meter panel beside it (`--layout strip` for a one-line bar underneath) |
 | Warp | Opens a new tab with the agent and the meter side by side |
-| tmux | A 3-row meter strip under the agent |
+| tmux | A meter panel beside the agent (or a 3-row strip with `--layout strip`) |
 | macOS Terminal | A small separate meter window |
 
 The meter closes automatically when the agent exits. So far only the iTerm2 setup has been tested by hand. The others follow each terminal's documentation; please open an issue if one misbehaves.
