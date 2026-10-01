@@ -1,0 +1,121 @@
+# drip coefficients — see RESEARCH.md §4–5 for the derivation of every number.
+# Scope: inference only (no training, no hardware manufacturing).
+# Water = consumption (not withdrawal), on-site cooling + off-site electricity generation.
+last_reviewed = "2026-09-27"
+
+# Water factor, litres per facility kWh:  WUE_site / PUE + EWIF   (RESEARCH.md §5 step 1)
+[water_factor]
+low  = 1.42
+mid  = 3.57
+high = 5.48
+
+# The inputs behind water_factor = wue / pue + ewif  (shown on the breakdown page)
+[water_factor_parts]
+wue  = { low = 0.15, mid = 0.50, high = 1.15 }   # on-site cooling water, L per IT kWh
+pue  = { low = 1.15, mid = 1.15, high = 1.20 }   # facility kWh per IT kWh
+ewif = { low = 1.29, mid = 3.14, high = 4.52 }   # water consumed generating electricity, L/kWh
+
+# On-site cooling only (the boundary Google / OpenAI report)
+[water_factor_onsite]
+low  = 0.130
+mid  = 0.435
+high = 0.958
+
+# Facility energy, Wh per 1K tokens, for the REFERENCE model (RESEARCH.md §4.2).
+# The reference sits between Sonnet- and Opus-class (output list price = reference_output_price).
+[energy]
+reference_output_price = 20.0   # USD / MTok output
+
+input_low   = 0.05
+input_mid   = 0.20
+input_high  = 0.40
+output_low  = 0.30
+output_mid  = 1.00
+output_high = 3.00
+
+# Cache-read energy as a fraction of uncached input. MID uses each model's own price ratio.
+cache_read_low  = 0.01
+cache_read_high = 0.25
+# Cache-write energy as a multiple of uncached input. MID uses each model's own price ratio.
+cache_write_low  = 1.0
+cache_write_high = 1.25
+
+# Per-model table. First matching glob wins.
+# Model energy = reference x (output_price / reference_output_price)  -- price is the only public
+# signal of relative serving cost; neither Anthropic nor OpenAI discloses model size or energy.
+# output_price: USD/MTok (standard tier, short context). cache_read / cache_write: price ratios vs input.
+# Sources: PRICING.md (checked 2026-09-27).
+
+[[model]]  # $10 in / $50 out, cache read $0.25
+match = "claude-fable-5-1*"
+output_price = 50
+cache_read = 0.025
+cache_write = 1.25
+
+[[model]]  # Fable 5: $10 / $50
+match = "claude-fable-*"
+output_price = 50
+cache_read = 0.1
+cache_write = 1.25
+
+[[model]]  # $4 / $20, cache read $0.20
+match = "claude-opus-5-5*"
+output_price = 20
+cache_read = 0.05
+cache_write = 1.25
+
+[[model]]  # Opus 5: $5 / $25
+match = "claude-opus-*"
+output_price = 25
+cache_read = 0.1
+cache_write = 1.25
+
+[[model]]  # Sonnet 5: $2 / $10
+match = "claude-sonnet-*"
+output_price = 10
+cache_read = 0.1
+cache_write = 1.25
+
+[[model]]  # Haiku 4.5: $1 / $5 (older tokenizer)
+match = "claude-haiku-*"
+output_price = 5
+cache_read = 0.1
+cache_write = 1.25
+
+[[model]]  # $10 / $50 (short context)
+match = "gpt-6-astra*"
+output_price = 50
+cache_read = 0.1
+cache_write = 1.25
+
+[[model]]  # $0.10 / $0.50
+match = "gpt-6-luna*"
+output_price = 0.5
+cache_read = 0.1
+cache_write = 1.25
+
+[[model]]  # $4 / $20 (promo price through 2026-11-21)
+match = "gpt-5.6-sol*"
+output_price = 20
+cache_read = 0.1
+cache_write = 1.25
+
+[[model]]  # $2 / $12
+match = "gpt-5.6-terra*"
+output_price = 12
+cache_read = 0.1
+cache_write = 1.25
+
+[[model]]  # $0.20 / $1.20
+match = "gpt-5.6-luna*"
+output_price = 1.2
+cache_read = 0.1
+cache_write = 1.25
+
+# Fallback for anything unmatched: the reference model, flagged as estimated ("~") in the UI.
+[[model]]
+match = "*"
+output_price = 20.0
+cache_read = 0.10
+cache_write = 1.25
+fallback = true

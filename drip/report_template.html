@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>drip · water ledger</title>
+<style>
+:root{
+  --bg:#070b10; --panel:#0b1118; --ink:#c9d4de; --dim:#5f6f7f; --faint:#1c2733;
+  --water:#3fb6ff; --deep:#1f6fd1; --foam:#9be2ff; --ok:#7ee787; --warn:#f2b15a; --link:#7cc7ff;
+  --glow:0 0 12px rgba(63,182,255,.35);
+}
+@media (prefers-color-scheme:light){:root:not([data-theme=dark]){
+  --bg:#f3f1ea; --panel:#fbfaf6; --ink:#1d2730; --dim:#6b7680; --faint:#d9d5c9;
+  --water:#0b72c6; --deep:#0a4f8f; --foam:#2c8fd6; --ok:#2f7d32; --warn:#9a5a00; --link:#0b62ad; --glow:none}}
+*{box-sizing:border-box}
+html,body{background:var(--bg)}
+body{margin:0;color:var(--ink);font:13.5px/1.55 ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  font-variant-ligatures:none}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg,rgba(255,255,255,.018) 0 1px,transparent 1px 3px)}
+main{max-width:1000px;margin:0 auto;padding:22px 16px 80px}
+a{color:var(--link);text-decoration:none;border-bottom:1px dotted currentColor}
+a:hover{color:var(--foam)}
+pre{margin:0;font:inherit;white-space:pre;overflow-x:auto}
+.dim{color:var(--dim)}.water{color:var(--water);text-shadow:var(--glow)}.deep{color:var(--deep)}.foam{color:var(--foam)}
+.ok{color:var(--ok)}.warn{color:var(--warn)}
+.prompt{color:var(--ok)}.prompt::before{content:"$ ";color:var(--dim)}
+.cursor{display:inline-block;width:.6em;background:var(--water);animation:blink 1.1s steps(1) infinite;color:transparent}
+@keyframes blink{50%{opacity:0}}
+header{display:flex;gap:28px;align-items:flex-end;flex-wrap:wrap}
+#bottle{line-height:1.15}#days{line-height:1}
+#logo{color:var(--water);text-shadow:var(--glow);line-height:1.15}
+fieldset{border:1px solid var(--faint);border-radius:2px;margin:22px 0 0;padding:12px 14px 14px;background:var(--panel);min-width:0}
+legend{padding:0 8px;color:var(--water);letter-spacing:.04em}
+legend::before{content:"┤ ";color:var(--dim)}legend::after{content:" ├";color:var(--dim)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:0 22px}
+.stat .n{font-size:28px;line-height:1.2;color:var(--water);text-shadow:var(--glow);font-weight:600}
+.stat .l{color:var(--dim)}
+select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--faint);padding:4px 6px;max-width:100%}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.key{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;color:var(--dim)}
+sup a{border:0;font-size:11px;margin-left:1px}
+.src{display:grid;grid-template-columns:3.2em 1fr;gap:2px 8px;padding:8px 0;border-top:1px dashed var(--faint)}
+.src:first-of-type{border-top:0}
+.src:target{background:rgba(63,182,255,.08);outline:1px solid var(--deep)}
+.tag{display:inline-block;padding:0 6px;margin-right:6px;border:1px solid currentColor;font-size:11px;line-height:1.5}
+.t-peer-reviewed{color:var(--ok)}.t-government{color:var(--foam)}.t-industry{color:var(--warn)}
+.t-analysis{color:#c49bff}.t-pricing{color:var(--dim)}.t-reference{color:var(--dim)}
+footer{margin-top:26px;color:var(--dim)}
+@media (max-width:560px){body{font-size:12px}.stat .n{font-size:22px}header{gap:10px}#logo{display:none}}
+@media (prefers-reduced-motion:reduce){.cursor{animation:none}}
+</style></head><body><main>
+
+<header>
+<pre id="bottle" aria-hidden="true"></pre>
+<div>
+<pre id="logo" aria-label="drip">     _      _
+  __| |_ __(_)_ __
+ / _` | '__| | '_ \
+| (_| | |  | | |_) |
+ \__,_|_|  |_| .__/
+             |_|</pre>
+<div class="prompt" style="margin-top:8px">drip session <span id="sid" class="dim"></span><span class="cursor">_</span></div>
+<div class="dim" id="basis"></div>
+</div>
+</header>
+
+<fieldset><legend>totals</legend>
+<div class="row" style="margin-bottom:10px"><span class="dim">session</span><select id="pick" aria-label="session"></select></div>
+<div class="stats">
+ <div class="stat"><div class="l">this session</div><div class="n" id="s-ml"></div><div class="dim" id="s-rel"></div></div>
+ <div class="stat"><div class="l">today · all tools</div><div class="n" id="t-ml"></div><div class="dim" id="t-rel"></div></div>
+ <div class="stat"><div class="l">all time</div><div class="n" id="a-ml"></div><div class="dim" id="a-rel"></div></div>
+</div>
+</fieldset>
+
+<fieldset><legend>uncertainty</legend>
+<pre id="range"></pre>
+<div class="dim" style="margin-top:6px">Token counts are exact. The spread comes from energy per token (no provider publishes it) and water per kWh (depends on which data centers and grids serve you).</div>
+</fieldset>
+
+<fieldset><legend>where this session's water went</legend>
+<pre id="models"></pre>
+<div class="key"><span><span class="deep">█</span> output</span><span><span class="water">▓</span> input</span><span><span class="foam">▒</span> cache read</span><span><span class="warn">░</span> cache write</span></div>
+</fieldset>
+
+<fieldset><legend>last 30 days</legend>
+<pre id="days"></pre>
+</fieldset>
+
+<fieldset><legend>all time by model</legend>
+<pre id="allmodels"></pre>
+</fieldset>
+
+<fieldset id="method"><legend>how it's calculated</legend>
+<pre id="formula"></pre>
+</fieldset>
+
+<fieldset id="sources"><legend>sources</legend>
+<div id="srclist"></div>
+</fieldset>
+
+<footer><pre id="foot"></pre></footer>
+</main>
+<script>
+const D=/*DATA*/null;
+const $=id=>document.getElementById(id);
+const G=237,F=6060,S=9460;
+const ml=v=>v<10?v.toFixed(1)+" mL":v<1000?Math.round(v)+" mL":(v/1000).toFixed(1)+" L";
+const rel=v=>v<6000?"≈ "+(v/G).toFixed(1)+" glasses of water":v<100000?"≈ "+(v/F).toFixed(1)+" toilet flushes":"≈ "+Math.round(v/S)+" shower-minutes";
+const tk=n=>n>=1e6?(n/1e6).toFixed(1)+"M":n>=1e3?Math.round(n/1e3)+"K":String(n);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const pad=(s,n)=>{s=String(s);return s.length>=n?s:s+" ".repeat(n-s.length)};
+const lpad=(s,n)=>{s=String(s);return s.length>=n?s:" ".repeat(n-s.length)+s};
+const span=(cls,t)=>`<span class="${cls}">${esc(t)}</span>`;
+const idx={};D.sources.forEach((s,i)=>idx[s.id]=i+1);
+const cite=ids=>ids.map(id=>`<sup><a href="#src-${id}">[${idx[id]}]</a></sup>`).join("");
+
+/* ---------- animated bottle ---------- */
+const SHAPE=["   .-------.   ","   |_______|   ","    |     |    ","  .'       '.  "," /           \\ ","|             |","|             |","|             |","|             |","|             |"," \\___________/ "];
+const FILL_FROM=4;
+function inner(r){const s=r.replace(/\s+$/,"");let lo=s.length-s.trimStart().length;while(lo<s.length&&s[lo]!==" ")lo++;let hi=s.length;while(hi>lo&&s[hi-1]!==" ")hi--;return[lo,hi]}
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+function drawBottle(t){
+  let out="";
+  SHAPE.forEach((row,i)=>{
+    let line="";
+    const [a,b]=inner(row), fill=i>=FILL_FROM&&i<SHAPE.length-1;
+    for(let x=0;x<row.length;x++){
+      const ch=row[x];
+      if(fill&&x>=a&&x<b){
+        if(i===FILL_FROM){const p=Math.sin(x*.9+t*4);line+=span("foam",p>.3?"≈":p>-.4?"~":"-")}
+        else{const bub=((x*7+i*13+Math.floor(t*3))%23)===0;line+=bub?span("foam","°"):span(i>7?"deep":"water",i>7?"▓":"▒")}
+      }else line+=ch===" "?" ":span("dim",ch);
+    }
+    out+=line+"\n";
+  });
+  $("bottle").innerHTML=out;
+}
+let t0=performance.now();
+(function tick(now){drawBottle((now-t0)/1000);if(!reduce)setTimeout(()=>requestAnimationFrame(tick),110)})(t0);
+
+/* ---------- static parts ---------- */
+$("basis").textContent=`${D.band} estimate · ${D.onsite?"data-center cooling water only":"cooling + electricity-generation water"} · inference only`;
+const set=(id,v)=>{$(id+"-ml").textContent=ml(v);$(id+"-rel").textContent=rel(v)};
+set("t",D.today);set("a",D.all.ml);
+D.sessions.forEach(s=>{const o=document.createElement("option");o.value=s.id;
+  o.textContent=`${s.project} · ${s.tool} · ${new Date(s.end).toLocaleString([], {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})} · ${ml(s.ml)}`;$("pick").appendChild(o)});
+
+function bar(parts,width){
+  const t=parts.output+parts.input+parts.cache_read+parts.cache_write||1;let out="",used=0;
+  [["output","deep","█"],["input","water","▓"],["cache_read","foam","▒"],["cache_write","warn","░"]].forEach(([k,c,ch],i,arr)=>{
+    let n=Math.round(parts[k]/t*width);if(i===arr.length-1)n=Math.max(0,width-used);used+=n;if(n)out+=span(c,ch.repeat(n))});
+  return out;
+}
+function show(id){
+  const s=D.sessions.find(x=>x.id===id)||D.sessions[0];if(!s)return;
+  $("pick").value=s.id;$("sid").textContent=s.id.slice(0,8);set("s",s.ml);
+  // range on a log scale
+  const r=s.range,W=46,lo=Math.log10(Math.max(r.low,.1)),hi=Math.log10(Math.max(r.high,.2));
+  const at=Math.round((Math.log10(Math.max(r.mid,.1))-lo)/((hi-lo)||1)*(W-1));
+  const line="├"+"─".repeat(at)+"●"+"─".repeat(Math.max(0,W-1-at))+"┤";
+  $("range").innerHTML=`${span("dim","low")}  ${span("water",line)}  ${span("dim","high")}\n`+
+    `${lpad(ml(r.low),3)}${" ".repeat(Math.max(1,at+5-ml(r.low).length))}${span("water","mid "+ml(r.mid))}${" ".repeat(Math.max(1,W-at-ml(r.mid).length-ml(r.high).length))}${ml(r.high)}`;
+  let h=span("dim",pad("model",27)+lpad("input",8)+lpad("output",8)+lpad("c.read",9)+lpad("c.write",9)+lpad("energy",11)+lpad("water",9))+"   "+span("dim","split")+"\n";
+  h+=span("dim","─".repeat(81)+"   "+"─".repeat(24))+"\n";
+  for(const m of s.models){const T=m.tokens;
+    h+=esc(pad(m.model+(m.est?" ~":""),27))+lpad(tk(T.input),8)+lpad(tk(T.output),8)+lpad(tk(T.cache_read),9)+lpad(tk(T.cache_write),9)+lpad(m.wh.toFixed(1)+" Wh",11)+span("water",lpad(ml(m.ml),9))+"   "+bar(m.parts,24)+"\n"}
+  $("models").innerHTML=h;
+  history.replaceState(null,"","#"+s.id);
+}
+$("pick").onchange=()=>show($("pick").value);
+
+// 30-day column chart, 8 rows of block characters
+(function(){
+  const H=8,blocks=" ▁▂▃▄▅▆▇█",vals=D.days.map(d=>d.ml),mx=Math.max(...vals,1);
+  let out="";const label=ml(mx);
+  for(let row=H;row>=1;row--){
+    let line=(row===H?lpad(label,7):row===1?lpad("0",7):" ".repeat(7))+" ┤";
+    vals.forEach((v,i)=>{const lvl=v/mx*H,c=lvl>=row?"█":lvl>row-1?blocks[Math.round((lvl-row+1)*8)]:" ";
+      line+=span(i===vals.length-1?"foam":"water",c+c)});
+    out+=line+"\n";
+  }
+  out+=" ".repeat(8)+"└"+"──".repeat(vals.length)+"\n"+" ".repeat(9)+span("dim",pad(D.days[0].day.slice(5),vals.length*2-5)+"today");
+  $("days").innerHTML=out;
+})();
+
+(function(){
+  const mx=Math.max(...D.all.models.map(m=>m.ml),1);
+  let a=span("dim",pad("model",27)+lpad("tokens",9)+lpad("energy",11)+lpad("water",9))+"\n"+span("dim","─".repeat(56))+"\n";
+  for(const m of D.all.models){const T=m.tokens;
+    a+=esc(pad(m.model+(m.est?" ~":""),27))+lpad(tk(T.input+T.output+T.cache_read+T.cache_write),9)+lpad((m.wh/1000).toFixed(2)+" kWh",11)+span("water",lpad(ml(m.ml),9))+"  "+span("deep","▇".repeat(Math.max(1,Math.round(m.ml/mx*28))))+"\n"}
+  $("allmodels").innerHTML=a;
+})();
+
+// methodology with live coefficients and citations
+(function(){
+  const C=D.coeffs,P=C.parts,b=D.band,PR=D.provenance,f=n=>Number(n).toFixed(n<0.01?4:n<1?3:2);
+  let o="";
+  o+=span("dim","# 1. water per kWh of data-center electricity")+"\n";
+  o+=`water_factor = WUE / PUE + EWIF\n`;
+  for(const k of ["low","mid","high"]){
+    o+=`  ${pad(k,5)} ${f(P.wue[k])} / ${f(P.pue[k])} + ${f(P.ewif[k])} = ${span(k===b?"water":"",f(C.wf[k])+" L/kWh")}\n`}
+  o+=`  WUE  on-site cooling water ${cite(PR.wue)}   PUE facility overhead ${cite(PR.pue)}\n  EWIF water consumed generating the electricity ${cite(PR.ewif)}\n\n`;
+  o+=span("dim","# 2. energy per 1K tokens (reference frontier model, Wh)")+"\n";
+  o+=`  ${pad("",13)}${lpad("low",8)}${lpad("mid",8)}${lpad("high",8)}\n`;
+  o+=`  ${pad("output",13)}${lpad(C.e.output_low,8)}${lpad(C.e.output_mid,8)}${lpad(C.e.output_high,8)}   ${cite(PR.e_output)}\n`;
+  o+=`  ${pad("input",13)}${lpad(C.e.input_low,8)}${lpad(C.e.input_mid,8)}${lpad(C.e.input_high,8)}   ${cite(PR.e_input)}\n`;
+  o+=`  ${pad("cache read",13)}${lpad(C.e.cache_read_low+"×",8)}${lpad("model",8)}${lpad(C.e.cache_read_high+"×",8)}   of input ${cite(PR.cache_read)}\n`;
+  o+=`  ${pad("cache write",13)}${lpad(C.e.cache_write_low+"×",8)}${lpad("model",8)}${lpad(C.e.cache_write_high+"×",8)}   of input ${cite(PR.cache_write)}\n\n`;
+  o+=span("dim","# 3. per-model scaling")+"\n";
+  o+=`  energy × (model output price ÷ $${C.e.reference_output_price}/M)  — price is the only public signal ${cite(PR.model_scale)}\n\n`;
+  o+=span("dim",`# 4. result: mL of water per 1K tokens (${b})`)+"\n";
+  o+=span("dim","  "+pad("model",20)+lpad("input",9)+lpad("output",9)+lpad("c.read",9)+lpad("c.write",9))+"\n";
+  for(const m of C.models){o+="  "+esc(pad(m.model,20))+["input","output","cache_read","cache_write"].map(k=>lpad(f(m[k]),9)).join("")+"\n"}
+  o+=`\n  comparisons: glass 237 mL · toilet flush 6.06 L · shower 9.46 L/min ${cite(PR.units)}\n`;
+  o+=`  cross-checked against published per-prompt figures ${cite(PR.checks)}`;
+  $("formula").innerHTML=o;
+})();
+
+$("srclist").innerHTML=D.sources.map((s,i)=>`<div class="src" id="src-${s.id}"><div class="dim">[${i+1}]</div><div>
+ <span class="tag t-${s.kind}">${s.kind}</span><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a>${s.alt?` <span class="dim">·</span> <a href="${esc(s.alt[1])}" target="_blank" rel="noopener">${esc(s.alt[0])}</a>`:""}
+ <div class="dim">${esc(s.authors)} · ${s.year}</div>
+ <div>${esc(s.finding)}</div>
+ <div class="dim">→ used for: ${esc(s.used_for)}</div></div></div>`).join("");
+
+$("foot").innerHTML=span("dim",`coefficients reviewed ${D.reviewed} · generated ${new Date(D.generated).toLocaleString()}\nestimates, not measurements · training and hardware manufacturing excluded`);
+show(decodeURIComponent(location.hash.slice(1)));
+addEventListener("hashchange",()=>{const h=decodeURIComponent(location.hash.slice(1));if(!h.startsWith("src-"))show(h)});
+</script></body></html>

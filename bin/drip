@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+import os
+import sys
+
+if sys.version_info < (3, 11):
+    sys.exit("drip needs Python 3.11+ (found %d.%d)" % sys.version_info[:2])
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+from drip.cli import main
+
+sys.exit(main())
