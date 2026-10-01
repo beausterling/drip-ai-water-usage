@@ -48,6 +48,23 @@ sup a{border:0;font-size:11px;margin-left:1px}
 footer{margin-top:26px;color:var(--dim)}
 @media (max-width:560px){body{font-size:12px}.stat .n{font-size:22px}header{gap:10px}#logo{display:none}}
 @media (prefers-reduced-motion:reduce){.cursor{animation:none}}
+
+.sharebtn{margin-left:auto;align-self:flex-start;display:inline-flex;align-items:center;gap:8px;font:inherit;color:var(--ink);
+  background:transparent;border:1px solid var(--faint);padding:8px 12px;cursor:pointer;border-radius:2px}
+.sharebtn:hover{border-color:var(--water);color:var(--water)}
+.sharebtn svg{width:20px;height:20px}
+#sharemodal{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
+#sharemodal.open{display:flex}
+.sheet{background:var(--panel);border:1px solid var(--faint);max-width:900px;width:100%;max-height:100%;overflow:auto;padding:16px;display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,300px);gap:18px}
+.sheet img{width:100%;height:auto;display:block;border:1px solid var(--faint)}
+.sheet h3{margin:0 0 6px;font-size:14px;color:var(--water);font-weight:600}
+.opts{display:flex;flex-direction:column;gap:8px}
+.opts button,.opts a.btn{font:inherit;text-align:left;color:var(--ink);background:var(--bg);border:1px solid var(--faint);padding:8px 10px;cursor:pointer;border-radius:2px}
+.opts button:hover,.opts a.btn:hover{border-color:var(--water);color:var(--water)}
+.opts a.btn{border-bottom:1px solid var(--faint);display:block}
+.seg{display:flex;border:1px solid var(--faint)}.seg button{flex:1;border:0;text-align:center;padding:6px 4px}.seg button.on{background:var(--deep);color:#fff}
+#sharestatus{min-height:1.5em;color:var(--ok)}
+@media (max-width:640px){.sheet{grid-template-columns:1fr}}
 </style></head><body><main>
 
 <header>
@@ -62,6 +79,7 @@ footer{margin-top:26px;color:var(--dim)}
 <div class="prompt" style="margin-top:8px">drip session <span id="sid" class="dim"></span><span class="cursor">_</span></div>
 <div class="dim" id="basis"></div>
 </div>
+<button class="sharebtn" id="sharebtn" aria-label="Share your stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M22 3 9.218 10.083"/><path d="M11.698 20.334 22 3.001H2l7.218 7.083 2.48 10.25Z"/></svg><span>share</span></button>
 </header>
 
 <fieldset><legend>totals</legend>
@@ -99,6 +117,27 @@ footer{margin-top:26px;color:var(--dim)}
 <div id="srclist"></div>
 </fieldset>
 
+<div id="sharemodal" role="dialog" aria-modal="true" aria-label="Share your water stats">
+ <div class="sheet">
+  <div><img id="shareimg" alt="Your drip water-usage summary card"></div>
+  <div class="opts">
+   <h3>share your drip</h3>
+   <div class="dim">headline</div>
+   <div class="seg" id="scope"><button data-s="all" class="on">all time</button><button data-s="today">today</button><button data-s="session">session</button></div>
+   <button id="sh-native">↗ share…</button>
+   <button id="sh-copy">⧉ copy image</button>
+   <button id="sh-dl">↓ download PNG</button>
+   <div class="dim" style="margin-top:6px">post with link</div>
+   <a class="btn" id="sh-x" target="_blank" rel="noopener">𝕏 post on X</a>
+   <a class="btn" id="sh-threads" target="_blank" rel="noopener">@ Threads</a>
+   <a class="btn" id="sh-bsky" target="_blank" rel="noopener">🦋 Bluesky</a>
+   <a class="btn" id="sh-li" target="_blank" rel="noopener">in LinkedIn</a>
+   <div class="dim small">Instagram: download the PNG and post it. Instagram has no web share link.</div>
+   <div id="sharestatus"></div>
+   <button id="sh-close">✕ close</button>
+  </div>
+ </div>
+</div>
 <footer><pre id="foot"></pre></footer>
 </main>
 <script>
@@ -224,6 +263,88 @@ $("srclist").innerHTML=D.sources.map((s,i)=>`<div class="src" id="src-${s.id}"><
  <div class="dim">→ used for: ${esc(s.used_for)}</div></div></div>`).join("");
 
 $("foot").innerHTML=span("dim",`coefficients reviewed ${D.reviewed} · generated ${new Date(D.generated).toLocaleString()}\nestimates, not measurements · training and hardware manufacturing excluded`);
+
+/* ---------- share card ---------- */
+(function(){
+  const W=1080,H=1350,C={bg:"#070b10",panel:"#0b1118",ink:"#e6eef6",dim:"#6b7d8f",faint:"#1c2733",water:"#3fb6ff",deep:"#1f6fd1",foam:"#9be2ff",ok:"#7ee787"};
+  const MONO='ui-monospace,"SF Mono",Menlo,Consolas,monospace';
+  let scope="all",blob=null;
+  const cur=()=>D.sessions.find(x=>x.id===$("pick").value)||D.sessions[0];
+  const repoShort=D.repo.replace(/^https?:\/\//,"");
+  function headline(){
+    const s=cur();
+    if(scope==="today")return{ml:D.today,label:"used by my AI coding agents today"};
+    if(scope==="session")return{ml:s?s.ml:0,label:"used in one AI coding session"};
+    return{ml:D.all.ml,label:"used by my AI coding agents so far"};
+  }
+  function draw(){
+    const cv=document.createElement("canvas");cv.width=W;cv.height=H;const g=cv.getContext("2d");
+    const grd=g.createRadialGradient(330,420,40,330,420,900);grd.addColorStop(0,"rgba(31,111,209,.32)");grd.addColorStop(1,"rgba(7,11,16,0)");
+    g.fillStyle=C.bg;g.fillRect(0,0,W,H);g.fillStyle=grd;g.fillRect(0,0,W,H);
+    g.fillStyle="rgba(255,255,255,.025)";for(let y=0;y<H;y+=3)g.fillRect(0,y,W,1);
+    const txt=(t,x,y,size,color,weight="400",glow=false)=>{g.font=`${weight} ${size}px ${MONO}`;g.fillStyle=color;
+      g.shadowColor=glow?"rgba(63,182,255,.55)":"transparent";g.shadowBlur=glow?18:0;g.fillText(t,x,y);g.shadowBlur=0};
+    // bottle (left) — fill level follows the headline amount in 500 mL bottles
+    const hl=headline(),fs=30;g.font=`400 ${fs}px ${MONO}`;const cw=g.measureText("M").width,lh=fs*1.18;
+    const bx=80,by=120,frac=Math.min(1,Math.max(.25,(hl.ml%500)/500||1));
+    const fillRows=Math.round(frac*6);
+    SHAPE.forEach((row,i)=>{const [a,b]=inner(row),body=i>=FILL_FROM&&i<SHAPE.length-1,fromBottom=SHAPE.length-2-i;
+      for(let x=0;x<row.length;x++){let ch=row[x],col=C.dim;
+        if(body&&x>=a&&x<b){ if(fromBottom<fillRows){const top=fromBottom===fillRows-1;ch=top?"≈~-"[(x+i)%3]:(fromBottom<2?"▓":"▒");col=top?C.foam:(fromBottom<2?C.deep:C.water);
+            if(!top&&(x*7+i*5)%11===0){ch="°";col=C.foam}} else ch=" "}
+        if(ch!==" ")txt(ch,bx+x*cw,by+i*lh,fs,col,"400",col===C.water)}});
+    // logo (right of bottle)
+    const LOGO=["     _      _","  __| |_ __(_)_ __"," / _` | '__| | '_ \\","| (_| | |  | | |_) |"," \\__,_|_|  |_| .__/","             |_|"];
+    LOGO.forEach((l,i)=>txt(l,560,150+i*40,34,C.water,"600",true));
+    // headline
+    txt(hl.ml<1000?Math.round(hl.ml)+" mL":(hl.ml/1000).toFixed(1)+" L",80,610,130,C.water,"700",true);
+    txt("of water "+hl.label,84,668,34,C.ink);
+    txt(rel(hl.ml),84,714,30,C.dim);
+    // stat rows
+    const s=cur(),top=D.all.models[0],toks=D.all.models.reduce((n,m)=>n+m.tokens.input+m.tokens.output+m.tokens.cache_read+m.tokens.cache_write,0);
+    const rows=[["today",ml(D.today)],["this session",s?ml(s.ml):"—"],["all time",ml(D.all.ml)],["top model",top?top.model:"—"],["tokens tracked",tk(toks)]]
+      .filter(r=>!(scope==="all"&&r[0]==="all time")&&!(scope==="today"&&r[0]==="today")&&!(scope==="session"&&r[0]==="this session"));
+    const BT=770,RH=52,BH=rows.length*RH+36;
+    g.strokeStyle=C.faint;g.lineWidth=2;g.strokeRect(80,BT,W-160,BH);
+    g.font=`400 26px ${MONO}`;g.fillStyle=C.bg;g.fillRect(100,BT-16,g.measureText(" stats ").width+4,30);txt(" stats ",102,BT+9,26,C.water);
+    rows.forEach((r,i)=>{const y=BT+52+i*RH;txt(r[0],112,y,30,C.dim);g.font=`600 30px ${MONO}`;const w=g.measureText(r[1]).width;txt(r[1],W-112-w,y,30,C.ink,"600")});
+    // 30-day sparkline
+    const sy=BT+BH+56,vals=D.days.map(d=>d.ml),mx=Math.max(...vals,1),bw=(W-160)/vals.length;
+    txt("last 30 days",80,sy,26,C.dim);
+    vals.forEach((v,i)=>{const h=Math.max(v?4:1,v/mx*80);g.fillStyle=i===vals.length-1?C.foam:C.water;g.fillRect(80+i*bw+2,sy+100-h,bw-4,h)});
+    // footer
+    txt("$ ",80,H-110,30,C.dim);txt("drip · free, open-source water meter for AI agents",116,H-110,28,C.ok);
+    txt(repoShort,80,H-60,32,C.water,"600",true);
+    return cv;
+  }
+  function render(){
+    const cv=draw();$("shareimg").src=cv.toDataURL("image/png");
+    cv.toBlob(b=>blob=b,"image/png");
+    const hl=headline(),text=`My AI coding agents have used ~${ml(hl.ml)} of water ${scope==="today"?"today":scope==="session"?"in one session":"so far"} (${rel(hl.ml).replace("≈ ","≈")}). Tracking it with drip, free & open source:`;
+    const u=encodeURIComponent(D.repo),t=encodeURIComponent(text);
+    $("sh-x").href=`https://x.com/intent/post?text=${t}&url=${u}`;
+    $("sh-threads").href=`https://www.threads.net/intent/post?text=${encodeURIComponent(text+" "+D.repo)}`;
+    $("sh-bsky").href=`https://bsky.app/intent/compose?text=${encodeURIComponent(text+" "+D.repo)}`;
+    $("sh-li").href=`https://www.linkedin.com/sharing/share-offsite/?url=${u}`;
+    render.text=text;
+  }
+  const status=m=>{$("sharestatus").textContent=m;clearTimeout(status.t);status.t=setTimeout(()=>$("sharestatus").textContent="",3500)};
+  const file=()=>new File([blob],"drip-water.png",{type:"image/png"});
+  $("sharebtn").onclick=()=>{render();$("sharemodal").classList.add("open");$("sh-close").focus()};
+  $("sh-close").onclick=()=>$("sharemodal").classList.remove("open");
+  $("sharemodal").onclick=e=>{if(e.target.id==="sharemodal")$("sharemodal").classList.remove("open")};
+  addEventListener("keydown",e=>{if(e.key==="Escape")$("sharemodal").classList.remove("open")});
+  $("scope").onclick=e=>{const b=e.target.closest("button");if(!b)return;scope=b.dataset.s;
+    [...$("scope").children].forEach(x=>x.classList.toggle("on",x===b));render()};
+  $("sh-dl").onclick=()=>{const a=document.createElement("a");a.href=$("shareimg").src;a.download="drip-water.png";a.click();status("saved drip-water.png")};
+  $("sh-copy").onclick=async()=>{try{await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);status("image copied — paste it into your post")}
+    catch(e){status("copy isn't allowed here — use download instead")}};
+  $("sh-native").onclick=async()=>{
+    const data={files:[file()],text:render.text+" "+D.repo};
+    if(navigator.canShare&&navigator.canShare({files:data.files})){try{await navigator.share(data)}catch(e){}}
+    else{status("this browser can't share files — downloaded instead");$("sh-dl").click()}};
+})();
 show(decodeURIComponent(location.hash.slice(1)));
+if(new URLSearchParams(location.search).has("share"))$("sharebtn").click();
 addEventListener("hashchange",()=>{const h=decodeURIComponent(location.hash.slice(1));if(!h.startsWith("src-"))show(h)});
 </script></body></html>

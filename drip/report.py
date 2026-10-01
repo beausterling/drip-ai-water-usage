@@ -8,6 +8,7 @@ from .coeffs import BANDS, Coefficients, Tokens
 from .sources import PROVENANCE, SOURCES
 
 TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "report_template.html")
+REPO_URL = "https://github.com/beausterling/drip-ai-water-usage"
 REPORT_PATH = os.path.join(os.path.dirname(ledger.DB_PATH), "report.html")
 TOKEN_COLS = "SUM(input), SUM(output), SUM(cache_read), SUM(cache_write)"
 
@@ -61,6 +62,7 @@ def build(db, band="mid", onsite=False, n_sessions=40, n_days=30):
                            **{k: v * wf for k, v in per.items()}})
     return {
         "generated": datetime.now().isoformat(),
+        "repo": REPO_URL,
         "sources": SOURCES, "provenance": PROVENANCE,
         "coeffs": {"parts": c.cfg["water_factor_parts"], "e": c.cfg["energy"],
                    "wf": c.cfg["water_factor_onsite" if onsite else "water_factor"], "models": model_rows},
