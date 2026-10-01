@@ -154,11 +154,12 @@ def cmd_session(a):
     meta = db.execute("SELECT tool, project, MIN(ts), MAX(ts) FROM usage WHERE session LIKE ?", (sid + "%",)).fetchone()
     print(f"session {sid}  ({meta[0]}, {meta[1]})\n{meta[2]} → {meta[3]}\n")
     totals = rows_to_totals(rows, coeffs, a.band, a.onsite)
-    print(f"{'model':<22}{'input':>9}{'output':>9}{'c.read':>9}{'c.write':>9}{'energy':>10}{'water':>10}")
+    w = max([22] + [len(m) + 3 for m in totals])
+    print(f"{'model':<{w}}{'input':>9}{'output':>9}{'c.read':>9}{'c.write':>9}{'energy':>10}{'water':>10}")
     sum_ml = 0
     for model, (ml, wh, t, est) in sorted(totals.items(), key=lambda kv: -kv[1][0]):
         sum_ml += ml
-        print(f"{model + ('~' if est else ''):<22}{fmt_tokens(t.input):>9}{fmt_tokens(t.output):>9}"
+        print(f"{model + ('~' if est else ''):<{w}}{fmt_tokens(t.input):>9}{fmt_tokens(t.output):>9}"
               f"{fmt_tokens(t.cache_read):>9}{fmt_tokens(t.cache_write):>9}{wh:>8.1f}Wh{fmt_ml(ml):>10}")
     print(f"\ntotal: {fmt_ml(sum_ml)} ≈ {relatable(sum_ml)}   [{a.band}{', on-site only' if a.onsite else ''}]")
     bands = "  ".join(f"{b}: {fmt_ml(sum(coeffs.water_ml(Tokens(*r[2:]), r[1], b, a.onsite) for r in rows))}" for b in BANDS)
