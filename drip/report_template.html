@@ -127,12 +127,12 @@ footer{margin-top:26px;color:var(--dim)}
    <button id="sh-native">↗ share…</button>
    <button id="sh-copy">⧉ copy image</button>
    <button id="sh-dl">↓ download PNG</button>
-   <div class="dim" style="margin-top:6px">post with link</div>
+   <div class="dim" style="margin-top:6px">post with image + link</div>
    <a class="btn" id="sh-x" target="_blank" rel="noopener">𝕏 post on X</a>
    <a class="btn" id="sh-threads" target="_blank" rel="noopener">@ Threads</a>
    <a class="btn" id="sh-bsky" target="_blank" rel="noopener">🦋 Bluesky</a>
    <a class="btn" id="sh-li" target="_blank" rel="noopener">in LinkedIn</a>
-   <div class="dim small">Instagram: download the PNG and post it. Instagram has no web share link.</div>
+   <div class="dim small">These copy the card to your clipboard and open the post: press <span id="pastekey">⌘V</span> in the post to attach it.<br>Instagram: download the PNG and post it from your phone.</div>
    <div id="sharestatus"></div>
    <button id="sh-close">✕ close</button>
   </div>
@@ -319,16 +319,34 @@ $("foot").innerHTML=span("dim",`coefficients reviewed ${D.reviewed} · generated
   }
   function render(){
     const cv=draw();$("shareimg").src=cv.toDataURL("image/png");
-    cv.toBlob(b=>blob=b,"image/png");
+    render.blobP=new Promise(r=>cv.toBlob(b=>{blob=b;r(b)},"image/png"));
     const hl=headline(),text=`My AI coding agents have used ~${ml(hl.ml)} of water ${scope==="today"?"today":scope==="session"?"in one session":"so far"} (${rel(hl.ml).replace("≈ ","≈")}). Tracking it with drip, free & open source:`;
     const u=encodeURIComponent(D.repo),t=encodeURIComponent(text);
     $("sh-x").href=`https://x.com/intent/post?text=${t}&url=${u}`;
     $("sh-threads").href=`https://www.threads.net/intent/post?text=${encodeURIComponent(text+" "+D.repo)}`;
     $("sh-bsky").href=`https://bsky.app/intent/compose?text=${encodeURIComponent(text+" "+D.repo)}`;
-    $("sh-li").href=`https://www.linkedin.com/sharing/share-offsite/?url=${u}`;
+    $("sh-li").href=`https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(text+" "+D.repo)}`;
     render.text=text;
   }
-  const status=m=>{$("sharestatus").textContent=m;clearTimeout(status.t);status.t=setTimeout(()=>$("sharestatus").textContent="",3500)};
+  const status=(m,ms=3500)=>{$("sharestatus").textContent=m;clearTimeout(status.t);status.t=setTimeout(()=>$("sharestatus").textContent="",ms)};
+  const mac=/Mac|iPhone|iPad/.test(navigator.platform||navigator.userAgent),paste=mac?"⌘V":"Ctrl+V";
+  $("pastekey").textContent=paste;
+  const copyImage=()=>Promise.race([navigator.clipboard.write([new ClipboardItem({"image/png":blob||render.blobP})]),
+    new Promise((_,no)=>setTimeout(()=>no(new Error("timeout")),1500))]);
+  // Social buttons: web intents can't carry an image, so put the card on the clipboard (or in Downloads)
+  // and open the composer; on phones, the native share sheet attaches it to the X/LinkedIn app directly.
+  ["sh-x","sh-threads","sh-bsky","sh-li"].forEach(id=>$(id).addEventListener("click",async e=>{
+    e.preventDefault();
+    const url=$(id).href,touch=matchMedia("(pointer:coarse)").matches;
+    if(touch&&navigator.canShare&&navigator.canShare({files:[file()]})){
+      try{await navigator.share({files:[file()],text:render.text+" "+D.repo});return}catch(err){if(err.name==="AbortError")return}}
+    let how;
+    try{await copyImage();how=`image copied: press ${paste} in the post to attach it`}
+    catch(err){$("sh-dl").click();how="image saved to Downloads: drag it into the post"}
+    const w=window.open(url,"_blank");
+    if(w)w.opener=null;else location.href=url;
+    status(how,12000);
+  }));
   const file=()=>new File([blob],"drip-water.png",{type:"image/png"});
   $("sharebtn").onclick=()=>{render();$("sharemodal").classList.add("open");$("sh-close").focus()};
   $("sh-close").onclick=()=>$("sharemodal").classList.remove("open");
@@ -337,7 +355,7 @@ $("foot").innerHTML=span("dim",`coefficients reviewed ${D.reviewed} · generated
   $("scope").onclick=e=>{const b=e.target.closest("button");if(!b)return;scope=b.dataset.s;
     [...$("scope").children].forEach(x=>x.classList.toggle("on",x===b));render()};
   $("sh-dl").onclick=()=>{const a=document.createElement("a");a.href=$("shareimg").src;a.download="drip-water.png";a.click();status("saved drip-water.png")};
-  $("sh-copy").onclick=async()=>{try{await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);status("image copied — paste it into your post")}
+  $("sh-copy").onclick=async()=>{try{await copyImage();status(`image copied: press ${paste} to paste it into your post`)}
     catch(e){status("copy isn't allowed here — use download instead")}};
   $("sh-native").onclick=async()=>{
     const data={files:[file()],text:render.text+" "+D.repo};
