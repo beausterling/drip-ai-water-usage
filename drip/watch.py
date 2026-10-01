@@ -93,19 +93,19 @@ def panel_view(s, cols, rows, t):
     bottles = s["ml"] / BOTTLE_ML
     b = bottle(bottles - int(bottles) if s["ml"] else 0, t)
     info = [
-        f"{BOLD}{WATER}💧 drip{RESET}  {DIM}{s['tool']} · {s['project']}{RESET}",
-        "",
+        f"{BOLD}{WATER}💧 drip{RESET}  {DIM}{s['tool']}{RESET}",
+        f"{DIM}{s['project'][:max(8, cols - 14)]}{RESET}",
         f"{DIM}session{RESET}  {WATER}{BOLD}{fmt_ml(s['ml'])}{RESET}",
         f"{DIM}         {relatable(s['ml'])}{RESET}",
         f"{DIM}today  {RESET}  {BOLD}{fmt_ml(s['today'])}{RESET}",
         f"{DIM}rate   {RESET}  {fmt_ml(s['rate'])}/min",
-        f"{DIM}model  {RESET}  {s['model']}",
+        f"{DIM}model  {RESET}  {s['model'][:max(8, cols - 23)]}",
         f"{DIM}bottles{RESET}  {int(bottles)} × 500 mL" + (" filled" if bottles >= 1 else ""),
         "",
     ]
     w = max(8, cols - 4)
     lines = []
-    if cols >= 44:
+    if cols >= 36:
         for i in range(max(len(b), len(info))):
             left = b[i] if i < len(b) else " " * 9
             lines.append(" " + left + "   " + (info[i] if i < len(info) else ""))

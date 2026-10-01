@@ -1,10 +1,12 @@
 """`drip run <cmd>` — run an agent CLI with a live water meter beside it.
 
 Picks the best layout the current terminal can script:
-  tmux (inside or installed)  thin 3-row meter under the agent
-  Ghostty 1.3+ / iTerm2       AppleScript split of the current tab, meter underneath
+  tmux (inside or installed)  split pane beside (or under) the agent
+  Ghostty 1.3+ / iTerm2       AppleScript split of the current tab
   Warp                        new tab from a Tab Config: agent + meter side by side
   Terminal.app / other        small separate meter window, or just a tip
+Layouts: "side" (default) is a ~40-column panel with the animated bottle;
+"strip" is a 3-row one-line bar under the agent.
 The meter pane exits by itself when the agent exits (--until-pid).
 """
 import os
@@ -41,10 +43,19 @@ def drip_bin():
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bin", "drip")
 
 
+SIDE_COLS = 40   # side panel: room for the bottle + totals
+STRIP_ROWS = 3   # strip: one-line bar
+
+
 def watch_cmd(argv, pid=None):
+    """Shell command for the meter pane. Uses this exact Python (panes opened by
+    a terminal often get a minimal PATH with an old system python3), and keeps
+    the pane open on error instead of vanishing."""
     tool = TOOL_FOR.get(os.path.basename(argv[0]))
-    return (f"{shlex.quote(drip_bin())} watch" + (f" --until-pid {pid}" if pid else "")
-            + (f" --tool {tool}" if tool else ""))
+    inner = (f"{shlex.quote(sys.executable)} {shlex.quote(drip_bin())} watch"
+             + (f" --until-pid {pid}" if pid else "") + (f" --tool {tool}" if tool else ""))
+    fallback = "echo; echo 'drip watch hit an error (see above). Press return to close.'; read _"
+    return "/bin/sh -c " + shlex.quote(f"{inner} || {{ {fallback}; }}")
 
 
 def terminal():
@@ -65,34 +76,43 @@ def as_str(s):
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def split_tmux(watch):
-    r = subprocess.run(["tmux", "split-window", "-v", "-l", "3", "-d", watch])
+def tmux_split_args(layout):
+    return ["-h", "-l", str(SIDE_COLS)] if layout == "side" else ["-v", "-l", str(STRIP_ROWS)]
+
+
+def split_tmux(watch, layout):
+    r = subprocess.run(["tmux", "split-window", *tmux_split_args(layout), "-d", watch])
     return r.returncode == 0, ""
 
 
-def split_ghostty(watch):
+def split_ghostty(watch, layout):
+    # Ghostty resizes splits in pixels; grow the agent pane a lot and let the
+    # meter pane shrink to Ghostty's minimum.
+    direction, grow = ("right", "right,500") if layout == "side" else ("down", "down,10000")
     return osascript(f'''
 tell application "Ghostty"
   set t1 to focused terminal of selected tab of front window
   set cfg to new surface configuration
   set command of cfg to {as_str(watch)}
-  set t2 to split t1 direction down with configuration cfg
+  set t2 to split t1 direction {direction} with configuration cfg
   try
-    perform action "resize_split:down,10000" on t1
+    perform action "resize_split:{grow}" on t1
   end try
   focus t1
 end tell''')
 
 
-def split_iterm(watch):
+def split_iterm(watch, layout):
+    how, size = ("vertically", f"set columns to {SIDE_COLS}") if layout == "side" \
+        else ("horizontally", f"set rows to {STRIP_ROWS}")
     return osascript(f'''
 tell application "iTerm2"
   set s1 to current session of current window
   tell s1
-    set s2 to (split horizontally with default profile command {as_str(watch)})
+    set s2 to (split {how} with default profile command {as_str(watch)})
   end tell
   try
-    tell s2 to set rows to 3
+    tell s2 to {size}
   end try
   select s1
 end tell''')
@@ -125,18 +145,18 @@ commands = [{as_str(watch)}]
     return r.returncode == 0, ""
 
 
-def meter_window(watch):
+def meter_window(watch, layout):
     """Terminal.app has no splits: open a small meter window instead."""
     return osascript(f'''
 tell application "Terminal"
   set w to do script {as_str(watch)}
   delay 0.2
-  set number of rows of front window to 3
-  set number of columns of front window to 90
+  set number of rows of front window to {16 if layout == "side" else STRIP_ROWS}
+  set number of columns of front window to {SIDE_COLS + 6 if layout == "side" else 90}
 end tell''')
 
 
-def main(argv):
+def main(argv, layout="side"):
     if not argv:
         print("usage: drip run <command> [args...]   e.g. drip run codex", file=sys.stderr)
         return 2
@@ -150,11 +170,11 @@ def main(argv):
     term = terminal()
     ok, err = False, ""
     if term == "tmux":
-        ok, err = split_tmux(watch)
+        ok, err = split_tmux(watch, layout)
     elif term == "ghostty":
-        ok, err = split_ghostty(watch)
+        ok, err = split_ghostty(watch, layout)
     elif term == "iterm":
-        ok, err = split_iterm(watch)
+        ok, err = split_iterm(watch, layout)
     elif term == "warp":
         ok, err = warp_tab(argv, watch_cmd(argv))
         if ok:
@@ -163,9 +183,9 @@ def main(argv):
     elif shutil.which("tmux") and not os.environ.get("DRIP_NO_TMUX"):
         cmd = " ".join(shlex.quote(a) for a in argv)
         os.execvp("tmux", ["tmux", "new-session", f"{cmd}; tmux kill-session", ";",
-                           "split-window", "-v", "-l", "3", "-d", watch_cmd(argv)])
+                           "split-window", *tmux_split_args(layout), "-d", watch_cmd(argv)])
     elif term == "apple":
-        ok, err = meter_window(watch)
+        ok, err = meter_window(watch, layout)
     if not ok:
         hint = "split your terminal and run: drip watch"
         print(f"💧 couldn't open the meter automatically ({term}{': ' + err if err else ''}); {hint}", file=sys.stderr)

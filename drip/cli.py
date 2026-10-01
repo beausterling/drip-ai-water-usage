@@ -328,7 +328,7 @@ def cmd_watch(a):
 
 def cmd_run(a):
     from . import run
-    return run.main(a.argv)
+    return run.main(a.argv, layout=a.layout)
 
 
 def cmd_splash(a):
@@ -372,6 +372,8 @@ def main(argv=None):
     w.add_argument("--until-pid", type=int, default=None, help=argparse.SUPPRESS)
     w.set_defaults(fn=cmd_watch)
     r = sub.add_parser("run", help="run an agent CLI with the live meter beside it")
+    r.add_argument("--layout", choices=["side", "strip"], default=os.environ.get("DRIP_LAYOUT", "side"),
+                   help="side: panel with the bottle (default) · strip: one-line bar underneath")
     r.add_argument("argv", nargs=argparse.REMAINDER)
     r.set_defaults(fn=cmd_run)
     a = p.parse_args(argv)

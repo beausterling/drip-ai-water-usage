@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
 import os
+import shutil
 import sys
 
 if sys.version_info < (3, 11):
+    # Started by an old system Python (e.g. macOS /usr/bin/python3 in a minimal
+    # environment). Re-run with a newer interpreter if one is installed.
+    for cand in ("python3.14", "python3.13", "python3.12", "python3.11",
+                 "/opt/homebrew/bin/python3", "/usr/local/bin/python3"):
+        path = shutil.which(cand) or (cand if os.path.isabs(cand) and os.access(cand, os.X_OK) else None)
+        if path and os.path.realpath(path) != os.path.realpath(sys.executable):
+            os.execv(path, [path, os.path.realpath(__file__)] + sys.argv[1:])
     sys.exit("drip needs Python 3.11+ (found %d.%d)" % sys.version_info[:2])
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 from drip.cli import main
