@@ -15,6 +15,27 @@ import sys
 
 TOOL_FOR = {"codex": "codex", "claude": "claude-code"}
 
+# Agents that are often installed inside an app bundle rather than on PATH.
+KNOWN_LOCATIONS = {
+    "codex": ["/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex",
+              "/Applications/Codex.app/Contents/Resources/codex",
+              "~/.codex/bin/codex", "/opt/homebrew/bin/codex", "/usr/local/bin/codex"],
+    "claude": ["~/.claude/local/claude", "~/.local/bin/claude", "/opt/homebrew/bin/claude"],
+    "gemini": ["/opt/homebrew/bin/gemini", "/usr/local/bin/gemini"],
+}
+
+
+def resolve(cmd):
+    """Path to cmd: PATH first, then known install locations."""
+    found = shutil.which(cmd)
+    if found:
+        return found
+    for p in KNOWN_LOCATIONS.get(cmd, []):
+        p = os.path.expanduser(p)
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+    return None
+
 
 def drip_bin():
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bin", "drip")
@@ -119,9 +140,11 @@ def main(argv):
     if not argv:
         print("usage: drip run <command> [args...]   e.g. drip run codex", file=sys.stderr)
         return 2
-    if not shutil.which(argv[0]):
+    path = resolve(argv[0])
+    if not path:
         print(f"drip run: command not found: {argv[0]}", file=sys.stderr)
         return 127
+    argv = [path] + argv[1:]
     pid = os.getpid()  # we exec the agent below, so it keeps this pid
     watch = watch_cmd(argv, pid)
     term = terminal()
