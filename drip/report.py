@@ -85,6 +85,7 @@ def write(db, band="mid", onsite=False, path=REPORT_PATH):
     try:
         with os.fdopen(fd, "w") as f:
             f.write(page)
+        os.chmod(tmp, 0o644)  # mkstemp creates 0600; keep the report's usual permissions
         os.replace(tmp, path)
     except BaseException:
         try:
