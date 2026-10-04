@@ -378,10 +378,10 @@ def main(argv=None):
     r.add_argument("argv", nargs=argparse.REMAINDER)
     r.set_defaults(fn=cmd_run)
     a = p.parse_args(argv)
-    if (getattr(a, "fn", None) not in (cmd_statusline, cmd_install, cmd_watch, cmd_run)
-            and not os.path.exists(INSTALLED_MARKER) and sys.stdout.isatty()):
-        return cmd_install(a)  # first interactive run gets the welcome
     if not getattr(a, "fn", None):
+        # first interactive bare `drip` gets the welcome; subcommands stay read-only
+        if not os.path.exists(INSTALLED_MARKER) and sys.stdout.isatty():
+            return cmd_install(a)
         a.id = None
         return cmd_overview(a)
     return a.fn(a) or 0

@@ -93,6 +93,20 @@ class DripTest(unittest.TestCase):
             line = re.sub(r"\x1b\[[0-9;]*m", "", watch.line_view(snap, cols))
             self.assertLessEqual(len(line) + 1, cols)
 
+    def test_first_run_welcome_only_on_bare_drip(self):
+        from unittest import mock
+        from drip import cli
+        with mock.patch.object(cli, "INSTALLED_MARKER", os.path.join(self.tmp, "installed")), \
+                mock.patch.object(sys.stdout, "isatty", return_value=True), \
+                mock.patch.object(cli, "cmd_install", return_value=0) as install, \
+                mock.patch.object(cli, "cmd_explain", return_value=None) as explain, \
+                mock.patch.object(cli, "cmd_overview", return_value=None):
+            cli.main(["explain"])
+            install.assert_not_called()
+            explain.assert_called_once()
+            cli.main([])
+            install.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()
