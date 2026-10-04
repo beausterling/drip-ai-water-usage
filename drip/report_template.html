@@ -319,6 +319,7 @@ $("foot").innerHTML=span("dim",`coefficients reviewed ${D.reviewed} · generated
   }
   function render(){
     const cv=draw();$("shareimg").src=cv.toDataURL("image/png");
+    blob=null;  // never hand out the previous scope's card while this one encodes
     render.blobP=new Promise(r=>cv.toBlob(b=>{blob=b;r(b)},"image/png"));
     const hl=headline(),text=`My AI coding agents have used ~${ml(hl.ml)} of water ${scope==="today"?"today":scope==="session"?"in one session":"so far"} (${rel(hl.ml).replace("≈ ","≈")}). Tracking it with drip, free & open source:`;
     const u=encodeURIComponent(D.repo),t=encodeURIComponent(text);
@@ -338,8 +339,8 @@ $("foot").innerHTML=span("dim",`coefficients reviewed ${D.reviewed} · generated
   ["sh-x","sh-threads","sh-bsky","sh-li"].forEach(id=>$(id).addEventListener("click",async e=>{
     e.preventDefault();
     const url=$(id).href,touch=matchMedia("(pointer:coarse)").matches;
-    if(touch&&navigator.canShare&&navigator.canShare({files:[file()]})){
-      try{await navigator.share({files:[file()],text:render.text+" "+D.repo});return}catch(err){if(err.name==="AbortError")return}}
+    if(touch&&navigator.canShare){const f=await file();
+      if(navigator.canShare({files:[f]}))try{await navigator.share({files:[f],text:render.text+" "+D.repo});return}catch(err){if(err.name==="AbortError")return}}
     let how;
     try{await copyImage();how=`image copied: press ${paste} in the post to attach it`}
     catch(err){$("sh-dl").click();how="image saved to Downloads: drag it into the post"}
@@ -347,7 +348,7 @@ $("foot").innerHTML=span("dim",`coefficients reviewed ${D.reviewed} · generated
     if(w)w.opener=null;else location.href=url;
     status(how,12000);
   }));
-  const file=()=>new File([blob],"drip-water.png",{type:"image/png"});
+  const file=async()=>new File([blob||await render.blobP],"drip-water.png",{type:"image/png"});
   $("sharebtn").onclick=()=>{render();$("sharemodal").classList.add("open");$("sh-close").focus()};
   $("sh-close").onclick=()=>$("sharemodal").classList.remove("open");
   $("sharemodal").onclick=e=>{if(e.target.id==="sharemodal")$("sharemodal").classList.remove("open")};
@@ -358,7 +359,7 @@ $("foot").innerHTML=span("dim",`coefficients reviewed ${D.reviewed} · generated
   $("sh-copy").onclick=async()=>{try{await copyImage();status(`image copied: press ${paste} to paste it into your post`)}
     catch(e){status("copy isn't allowed here — use download instead")}};
   $("sh-native").onclick=async()=>{
-    const data={files:[file()],text:render.text+" "+D.repo};
+    const data={files:[await file()],text:render.text+" "+D.repo};
     if(navigator.canShare&&navigator.canShare({files:data.files})){try{await navigator.share(data)}catch(e){}}
     else{status("this browser can't share files — downloaded instead");$("sh-dl").click()}};
 })();

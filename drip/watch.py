@@ -116,7 +116,15 @@ def panel_view(s, cols, rows, t):
     return lines[:rows]
 
 
-def run(tool=None, band="mid", onsite=False, interval=2.0, until_pid=None):
+def read_pidfile(path):
+    try:
+        with open(path) as f:
+            return int(f.read().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def run(tool=None, band="mid", onsite=False, interval=2.0, until_pid=None, until_pidfile=None):
     coeffs = Coefficients()
     db = ledger.connect()
     out = sys.stdout
@@ -127,6 +135,8 @@ def run(tool=None, band="mid", onsite=False, interval=2.0, until_pid=None):
     last_sync = 0.0
     try:
         while not stop:
+            if until_pidfile and not until_pid:
+                until_pid = read_pidfile(until_pidfile)  # written once the agent pane starts
             if until_pid:
                 try:
                     os.kill(until_pid, 0)
@@ -152,5 +162,10 @@ def run(tool=None, band="mid", onsite=False, interval=2.0, until_pid=None):
     except KeyboardInterrupt:
         pass
     finally:
+        if until_pidfile:
+            try:
+                os.unlink(until_pidfile)
+            except OSError:
+                pass
         out.write("\x1b[?25h\x1b[?1049l")
         out.flush()

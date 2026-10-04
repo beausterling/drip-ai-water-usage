@@ -91,6 +91,7 @@ def parse_codex(path, lines, state):
             prev = state.get("last") or {k: 0 for k in cur}
             if sum(cur.values()) < sum(prev.values()):  # counter reset
                 prev = {k: 0 for k in cur}
+                state["resets"] = state.get("resets", 0) + 1
             delta = {k: max(0, cur[k] - prev[k]) for k in cur}
             state["last"] = cur
             if not any(delta.values()):
@@ -98,7 +99,10 @@ def parse_codex(path, lines, state):
             session = codex_session_id(path)
             ts = d.get("timestamp")
             cached, cw = delta["cached_input_tokens"], delta["cache_write_input_tokens"]
-            yield (f"cx:{session}:{tot.get('total_tokens') or sum(cur.values())}", "codex", session,
+            # After a reset the running total can repeat an earlier one, so tag the key with
+            # the reset count (left off before the first reset to keep existing keys stable).
+            gen = f":r{state['resets']}" if state.get("resets") else ""
+            yield (f"cx:{session}:{tot.get('total_tokens') or sum(cur.values())}{gen}", "codex", session,
                    state.get("model") or "gpt-unknown", ts, local_day(ts), state.get("cwd"),
                    max(0, delta["input_tokens"] - cached - cw), delta["output_tokens"], cached, cw)
 

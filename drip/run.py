@@ -14,6 +14,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 
 TOOL_FOR = {"codex": "codex", "claude": "claude-code"}
 
@@ -47,13 +48,15 @@ SIDE_COLS = 40   # side panel: room for the bottle + totals
 STRIP_ROWS = 3   # strip: one-line bar
 
 
-def watch_cmd(argv, pid=None):
+def watch_cmd(argv, pid=None, pidfile=None):
     """Shell command for the meter pane. Uses this exact Python (panes opened by
     a terminal often get a minimal PATH with an old system python3), and keeps
     the pane open on error instead of vanishing."""
     tool = TOOL_FOR.get(os.path.basename(argv[0]))
     inner = (f"{shlex.quote(sys.executable)} {shlex.quote(drip_bin())} watch"
-             + (f" --until-pid {pid}" if pid else "") + (f" --tool {tool}" if tool else ""))
+             + (f" --until-pid {pid}" if pid else "")
+             + (f" --until-pidfile {shlex.quote(pidfile)}" if pidfile else "")
+             + (f" --tool {tool}" if tool else ""))
     fallback = "echo; echo 'drip watch hit an error (see above). Press return to close.'; read _"
     return "/bin/sh -c " + shlex.quote(f"{inner} || {{ {fallback}; }}")
 
@@ -118,12 +121,18 @@ tell application "iTerm2"
 end tell''')
 
 
-def warp_tab(argv, watch):
-    """Warp can't split the current tab from outside; open a new tab with both panes."""
+def warp_tab(argv):
+    """Warp can't split the current tab from outside; open a new tab with both panes.
+    The agent pane records its pid so the meter pane can exit when the agent does."""
     d = os.path.expanduser("~/.warp/tab_configs")
     os.makedirs(d, exist_ok=True)
     name = "drip-run"
-    cmd = " ".join(shlex.quote(a) for a in argv)
+    fd, pidfile = tempfile.mkstemp(prefix="drip-run-", suffix=".pid")
+    os.close(fd)
+    os.unlink(pidfile)  # the watcher waits for the agent pane to create it
+    watch = watch_cmd(argv, pidfile=pidfile)
+    agent = " ".join(shlex.quote(a) for a in argv)
+    cmd = "/bin/sh -c " + shlex.quote(f"echo $$ > {shlex.quote(pidfile)}; exec {agent}")
     with open(os.path.join(d, name + ".toml"), "w") as f:
         f.write(f'''name = "{name}"
 [[panes]]
@@ -176,7 +185,7 @@ def main(argv, layout="side"):
     elif term == "iterm":
         ok, err = split_iterm(watch, layout)
     elif term == "warp":
-        ok, err = warp_tab(argv, watch_cmd(argv))
+        ok, err = warp_tab(argv)
         if ok:
             print("💧 opened a new Warp tab with the agent and the meter side by side")
             return 0

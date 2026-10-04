@@ -71,6 +71,14 @@ class DripTest(unittest.TestCase):
         self.assertEqual(rows[1][3], "gpt-5.6-sol")
         self.assertEqual(rows[1][7:], (500, 30, 1500, 0))  # 2000 new input, 1500 of it cached
 
+    def test_codex_counter_reset_keys_stay_unique(self):
+        p = os.path.join(self.tmp, "rollout-x-11111111-2222-3333-4444-555555555555.jsonl")
+        write(p, [cx_count(100, 0, 20), cx_count(200, 0, 40),   # totals 120, 240
+                  cx_count(50, 0, 10), cx_count(100, 0, 20)])   # reset, then 60, 120 again
+        rows = list(ledger.parse_codex(p, open(p).read().splitlines(), {}))
+        self.assertEqual(len({r[0] for r in rows}), 4)
+        self.assertEqual(rows[0][0], "cx:11111111-2222-3333-4444-555555555555:120")  # pre-reset keys unchanged
+
     def test_codex_forked_snapshot_ignored(self):
         p = os.path.join(self.tmp, "rollout-x-11111111-2222-3333-4444-555555555555.jsonl")
         write(p, [cx_count(0, 0, 0, total=89208)])
@@ -92,6 +100,33 @@ class DripTest(unittest.TestCase):
         for cols in (30, 60, 120):
             line = re.sub(r"\x1b\[[0-9;]*m", "", watch.line_view(snap, cols))
             self.assertLessEqual(len(line) + 1, cols)
+
+    def test_report_cache_respects_band(self):
+        from unittest import mock
+        from drip import cli, report
+        path = os.path.join(self.tmp, "report.html")
+        report.write(self.db, "mid", False, path)
+        self.assertFalse([f for f in os.listdir(self.tmp) if f.endswith(".tmp")])  # temp file replaced
+        with mock.patch.object(report, "REPORT_PATH", path), mock.patch.object(report, "write") as w:
+            cli.refresh_report(self.db, "mid", False)
+            w.assert_not_called()  # fresh and same options: reuse
+            cli.refresh_report(self.db, "low", False)
+            w.assert_called_once()  # different band: rebuild
+
+    def test_watch_exits_when_pidfile_agent_is_gone(self):
+        import io
+        import subprocess
+        from unittest import mock
+        from drip import watch
+        dead = subprocess.Popen(["true"])
+        dead.wait()
+        pidfile = os.path.join(self.tmp, "agent.pid")
+        with open(pidfile, "w") as f:
+            f.write(str(dead.pid))
+        with mock.patch.object(watch.ledger, "connect", return_value=self.db), \
+                mock.patch.object(sys, "stdout", io.StringIO()):
+            watch.run(until_pidfile=pidfile)  # returns instead of polling forever
+        self.assertFalse(os.path.exists(pidfile))
 
     def test_first_run_welcome_only_on_bare_drip(self):
         from unittest import mock

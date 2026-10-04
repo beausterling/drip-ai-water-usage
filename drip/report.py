@@ -1,6 +1,7 @@
 """Self-contained HTML breakdown, opened by Cmd+clicking the status-line segment."""
 import json
 import os
+import tempfile
 from datetime import date, datetime, timedelta
 
 from . import ledger
@@ -79,8 +80,23 @@ def write(db, band="mid", onsite=False, path=REPORT_PATH):
     with open(TEMPLATE_PATH) as f:
         template = f.read()
     page = template.replace("/*DATA*/null", json.dumps(data).replace("</", "<\\/"))
-    tmp = path + ".tmp"
-    with open(tmp, "w") as f:
-        f.write(page)
-    os.replace(tmp, path)
+    # Unique temp file per call: several status lines can refresh the report at once.
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".report-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(page)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    with open(path + ".opts", "w") as f:
+        f.write(opts_tag(band, onsite))
     return path
+
+
+def opts_tag(band, onsite):
+    """What the cached report was priced with, so the status line can tell if it's stale."""
+    return f"{band}:{int(bool(onsite))}"

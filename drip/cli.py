@@ -105,7 +105,9 @@ def refresh_report(db, band, onsite):
     """Rewrite the HTML breakdown at most every REPORT_EVERY_S seconds."""
     from . import report
     try:
-        if time.time() - os.path.getmtime(report.REPORT_PATH) < REPORT_EVERY_S:
+        with open(report.REPORT_PATH + ".opts") as f:
+            same_opts = f.read() == report.opts_tag(band, onsite)
+        if same_opts and time.time() - os.path.getmtime(report.REPORT_PATH) < REPORT_EVERY_S:
             return report.REPORT_PATH
     except OSError:
         pass
@@ -324,7 +326,7 @@ def cmd_overview(a):
 
 def cmd_watch(a):
     from . import watch
-    watch.run(tool=a.tool, band=a.band, onsite=a.onsite, until_pid=a.until_pid)
+    watch.run(tool=a.tool, band=a.band, onsite=a.onsite, until_pid=a.until_pid, until_pidfile=a.until_pidfile)
 
 
 def cmd_run(a):
@@ -371,6 +373,7 @@ def main(argv=None):
     w = sub.add_parser("watch", help="live meter for a split pane")
     w.add_argument("--tool", choices=["claude-code", "codex"], default=None)
     w.add_argument("--until-pid", type=int, default=None, help=argparse.SUPPRESS)
+    w.add_argument("--until-pidfile", default=None, help=argparse.SUPPRESS)
     w.set_defaults(fn=cmd_watch)
     r = sub.add_parser("run", help="run an agent CLI with the live meter beside it")
     r.add_argument("--layout", choices=["side", "strip"], default=os.environ.get("DRIP_LAYOUT", "side"),
