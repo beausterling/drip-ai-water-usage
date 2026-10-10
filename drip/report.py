@@ -24,12 +24,17 @@ def _price(coeffs, rows, band, onsite):
         wf = coeffs.water_factor(band, onsite)
         per = coeffs.per_1k_wh(model, band)
         parts = {k: getattr(t, k) * per[k] / 1000 * wf for k in ("input", "output", "cache_read", "cache_write")}
+        cr, cw = coeffs.cache_ratios(model, band)
+        # every factor behind this model's number, for the step-by-step chain on the page
+        chain = {"price": coeffs.model(model)["output_price"], "scale": coeffs.scale(model),
+                 "cache_read": cr, "cache_write": cw, "per_1k": per, "wf": wf,
+                 "range": {b: coeffs.water_ml(t, model, b, onsite) for b in BANDS}}
         models.append({"model": model, "est": coeffs.is_estimated(model), "ml": ml, "wh": wh,
-                       "tokens": vars(t), "parts": parts})
+                       "tokens": vars(t), "parts": parts, "chain": chain})
         total["ml"] += ml
         total["wh"] += wh
         for b in BANDS:
-            total["range"][b] += coeffs.water_ml(t, model, b, onsite)
+            total["range"][b] += chain["range"][b]
     models.sort(key=lambda m: -m["ml"])
     return {"models": models, **total}
 
@@ -68,6 +73,7 @@ def build(db, band="mid", onsite=False, n_sessions=40, n_days=30):
         "coeffs": {"parts": c.cfg["water_factor_parts"], "e": c.cfg["energy"],
                    "wf": c.cfg["water_factor_onsite" if onsite else "water_factor"], "models": model_rows},
         "band": band, "onsite": onsite, "reviewed": c.cfg.get("last_reviewed"),
+        "version": c.version,
         "sessions": sessions,
         "days": [{"day": d, "ml": days.get(d, 0.0)} for d in day_list],
         "all": _price(c, all_rows, band, onsite),

@@ -48,14 +48,29 @@ class Coefficients:
     def is_estimated(self, name):
         return bool(self.model(name).get("fallback"))
 
+    @property
+    def version(self):
+        """Which coefficients priced a number: the file's version (or review date), +custom for user overrides."""
+        v = str(self.cfg.get("version") or self.cfg.get("last_reviewed") or "unknown")
+        return v if self.path == DEFAULT_PATH else v + "+custom"
+
+    def scale(self, model):
+        """Energy multiplier vs the reference model: output_price / reference_output_price."""
+        return self.model(model)["output_price"] / self.cfg["energy"]["reference_output_price"]
+
+    def cache_ratios(self, model, band="mid"):
+        """(cache read, cache write) energy as multiples of uncached input."""
+        e, m = self.cfg["energy"], self.model(model)
+        if band == "mid":
+            return m["cache_read"], m["cache_write"]
+        return e[f"cache_read_{band}"], e[f"cache_write_{band}"]
+
     def per_1k_wh(self, model, band="mid"):
         """Wh per 1K tokens for each token type, for this model and band."""
         e = self.cfg["energy"]
-        m = self.model(model)
-        scale = m["output_price"] / e["reference_output_price"]
+        scale = self.scale(model)
         e_in = e[f"input_{band}"] * scale
-        cr = m["cache_read"] if band == "mid" else e[f"cache_read_{band}"]
-        cw = m["cache_write"] if band == "mid" else e[f"cache_write_{band}"]
+        cr, cw = self.cache_ratios(model, band)
         return {
             "input": e_in,
             "output": e[f"output_{band}"] * scale,

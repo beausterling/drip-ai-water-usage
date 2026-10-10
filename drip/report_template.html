@@ -101,6 +101,10 @@ footer{margin-top:26px;color:var(--dim)}
 <div class="key"><span><span class="deep">█</span> output</span><span><span class="water">▓</span> input</span><span><span class="foam">▒</span> cache read</span><span><span class="warn">░</span> cache write</span></div>
 </fieldset>
 
+<fieldset id="steps"><legend>this session, step by step</legend>
+<pre id="chain"></pre>
+</fieldset>
+
 <fieldset><legend>last 30 days</legend>
 <pre id="days"></pre>
 </fieldset>
@@ -205,9 +209,29 @@ function show(id){
   for(const m of s.models){const T=m.tokens;
     h+=esc(pad(m.model+(m.est?" ~":""),27))+lpad(tk(T.input),8)+lpad(tk(T.output),8)+lpad(tk(T.cache_read),9)+lpad(tk(T.cache_write),9)+lpad(m.wh.toFixed(1)+" Wh",11)+span("water",lpad(ml(m.ml),9))+"   "+bar(m.parts,24)+"\n"}
   $("models").innerHTML=h;
+  chain(s);
   history.replaceState(null,"","#"+s.id);
 }
 $("pick").onchange=()=>show($("pick").value);
+
+// tokens (exact) → Wh (estimated) → mL (estimated), with the actual factors used for each model
+const fx=n=>Number(n).toFixed(n<0.01?4:n<1?3:2);
+function chain(s){
+  const e=D.coeffs.e,P=D.coeffs.parts,PR=D.provenance,b=D.band,K=["input","output","cache_read","cache_write"];
+  let o=span("dim",`# water = tokens × Wh per 1K tokens ÷ 1000 × L per kWh   (${b} band${D.onsite?", cooling water only":""})`)+"\n";
+  for(const m of s.models){const T=m.tokens,c=m.chain,w=c.per_1k;
+    o+="\n"+span("water",m.model+(m.est?" ~ (unknown model, priced as the reference)":""))+"\n";
+    o+=`  ${span("dim","1 tokens")}   in ${tk(T.input)} · out ${tk(T.output)} · cache read ${tk(T.cache_read)} · cache write ${tk(T.cache_write)}  ${span("dim","exact, from local logs")}\n`;
+    o+=`  ${span("dim","2 Wh/1K")}    reference in ${fx(e["input_"+b])} ${cite(PR.e_input)} · out ${fx(e["output_"+b])} ${cite(PR.e_output)}\n`;
+    o+=`             × price scale $${c.price} ÷ $${e.reference_output_price}/M output = ${fx(c.scale)}× ${cite(PR.model_scale)}\n`;
+    o+=`             = in ${fx(w.input)} · out ${fx(w.output)} · cache read ${fx(w.cache_read)} (${c.cache_read}× in) ${cite(PR.cache_read)} · cache write ${fx(w.cache_write)} (${c.cache_write}× in) ${cite(PR.cache_write)}\n`;
+    o+=`  ${span("dim","3 energy")}   (${K.map(k=>tk(T[k])+"×"+fx(w[k])).join(" + ")}) ÷ 1000 = ${m.wh.toFixed(1)} Wh\n`;
+    const why=D.onsite?`WUE ${fx(P.wue[b])} / PUE ${fx(P.pue[b])}, cooling only`:`WUE ${fx(P.wue[b])} / PUE ${fx(P.pue[b])} + EWIF ${fx(P.ewif[b])}`;
+    o+=`  ${span("dim","4 water")}    ${m.wh.toFixed(1)} Wh × ${fx(c.wf)} L/kWh (${why}) ${cite([...PR.wue,...PR.pue,...(D.onsite?[]:PR.ewif)].filter((x,i,a)=>a.indexOf(x)===i))} = ${span("water",ml(m.ml))}\n`;
+    o+=`             ${["low","mid","high"].map(k=>span(k===b?"water":"dim",k+" "+ml(c.range[k]))).join(span("dim"," · "))}\n`;
+  }
+  $("chain").innerHTML=o;
+}
 
 // 30-day column chart, 8 rows of block characters
 (function(){
@@ -262,7 +286,7 @@ $("srclist").innerHTML=D.sources.map((s,i)=>`<div class="src" id="src-${s.id}"><
  <div>${esc(s.finding)}</div>
  <div class="dim">→ used for: ${esc(s.used_for)}</div></div></div>`).join("");
 
-$("foot").innerHTML=span("dim",`coefficients reviewed ${D.reviewed} · generated ${new Date(D.generated).toLocaleString()}\nestimates, not measurements · training and hardware manufacturing excluded`);
+$("foot").innerHTML=span("dim",`coefficients ${D.version} (reviewed ${D.reviewed}) · generated ${new Date(D.generated).toLocaleString()}\nestimates, not measurements · training and hardware manufacturing excluded`);
 
 /* ---------- share card ---------- */
 (function(){
@@ -312,6 +336,10 @@ $("foot").innerHTML=span("dim",`coefficients reviewed ${D.reviewed} · generated
     const sy=BT+BH+56,vals=D.days.map(d=>d.ml),mx=Math.max(...vals,1),bw=(W-160)/vals.length;
     txt("last 30 days",80,sy,26,C.dim);
     vals.forEach((v,i)=>{const h=Math.max(v?4:1,v/mx*80);g.fillStyle=i===vals.length-1?C.foam:C.water;g.fillRect(80+i*bw+2,sy+100-h,bw-4,h)});
+    // stamp: when and with which settings this was priced, so two cards can be compared
+    const stamp=`${D.generated.slice(0,10)} · ${D.band} estimate · ${D.onsite?"cooling water only":"cooling + electricity water"} · coefficients ${D.version}`;
+    let ss=24;g.font=`400 ${ss}px ${MONO}`;while(ss>16&&g.measureText(stamp).width>W-160){ss--;g.font=`400 ${ss}px ${MONO}`}
+    txt(stamp,80,64,ss,C.dim);
     // footer
     txt("$ ",80,H-110,30,C.dim);txt("drip · free, open-source water meter for AI agents",116,H-110,28,C.ok);
     txt(repoShort,80,H-60,32,C.water,"600",true);

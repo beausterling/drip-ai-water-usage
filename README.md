@@ -33,7 +33,7 @@ add instead of replacing yours.
 | **Claude Code status line** | Automatic after install. **Cmd+click** the 💧 to open the full breakdown (iTerm2, Ghostty, WezTerm, Kitty). |
 | **Codex CLI / any agent** | `drip run codex` opens the agent with a live meter beside it (details below). |
 | **Live meter, any terminal** | Split your terminal and run `drip watch`. A short pane becomes a one-line bar; a tall one shows a filling bottle. |
-| **Browser breakdown** | `drip open`: this session by model and token type, the uncertainty range, 30-day history, the methodology, and sources. The **share** button makes a 1080×1350 stats card for social media. |
+| **Browser breakdown** | `drip open`: this session by model and token type, each model's math step by step (tokens → Wh → litres, with the factor and source for every step), the uncertainty range, 30-day history, the methodology, and sources. The **share** button makes a 1080×1350 stats card for social media, stamped with the date, band, and coefficient version so cards from different days can be compared. |
 | **Inside Claude Code** | Type `!drip` for a text breakdown (uses no model tokens). |
 
 `drip run` uses whatever layout your terminal supports:

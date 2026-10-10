@@ -113,6 +113,32 @@ class DripTest(unittest.TestCase):
             cli.refresh_report(self.db, "low", False)
             w.assert_called_once()  # different band: rebuild
 
+    def test_report_chain_reconciles_with_totals(self):
+        from drip import report
+        path = os.path.join(self.tmp, "proj", "S1.jsonl")
+        write(path, [cc("a"), cc("b", model="claude-haiku-4-5", i=5, o=7, cr=300, cw=0), cc("c", model="mystery-1")])
+        ledger.sync(self.db, [path])
+        for band, onsite in (("mid", False), ("high", True)):
+            data = report.build(self.db, band, onsite)
+            self.assertTrue(data["version"])
+            self.assertEqual(len(data["all"]["models"]), 3)
+            for m in data["all"]["models"]:
+                ch, t = m["chain"], m["tokens"]
+                wh = sum(t[k] * ch["per_1k"][k] for k in t) / 1000
+                self.assertAlmostEqual(wh, m["wh"])
+                self.assertAlmostEqual(wh * ch["wf"], m["ml"])
+                self.assertAlmostEqual(ch["range"][band], m["ml"])
+                self.assertAlmostEqual(ch["per_1k"]["cache_read"], ch["per_1k"]["input"] * ch["cache_read"])
+
+    def test_coefficient_version_marks_custom_files(self):
+        c = Coefficients()
+        self.assertEqual(c.version, c.cfg.get("version") or c.cfg["last_reviewed"])
+        custom = os.path.join(self.tmp, "c.toml")
+        with open(c.path) as src, open(custom, "w") as dst:
+            dst.write(src.read())
+        self.assertTrue(Coefficients(custom).version.endswith("+custom"))
+        self.assertAlmostEqual(c.scale("claude-sonnet-5"), 10 / 20)
+
     def test_watch_exits_when_pidfile_agent_is_gone(self):
         import io
         import subprocess
